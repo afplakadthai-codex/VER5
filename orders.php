@@ -603,33 +603,38 @@ $currencyExpr = isset($orderCols['currency']) ? 'o.`currency`' : "'USD'";
 $subtotalExpr = isset($orderCols['subtotal']) ? 'o.`subtotal`' : 'SUM(' . $lineTotalExpr . ')';
 $totalExpr = isset($orderCols['total']) ? 'o.`total`' : 'SUM(' . $lineTotalExpr . ')';
 $paidAtExpr = isset($orderCols['paid_at']) ? 'o.`paid_at`' : 'NULL';
+$sellerSubtotalExpr = 'SUM(oi.`qty` * oi.`unit_price`)';
+$listWhereSql = $whereSql . ' AND oi.`seller_id` = :seller_id';
+$listParams = $params;
+$listParams[':seller_id'] = $sellerId;
 
 $listSql = "
     SELECT
         o.`id` AS order_id,
-        COALESCE({$orderCodeExpr}, CAST(o.`id` AS CHAR)) AS order_code,
-        {$buyerExpr} AS buyer_display,
+        MAX(COALESCE({$orderCodeExpr}, CAST(o.`id` AS CHAR))) AS order_code,
+        MAX({$buyerExpr}) AS buyer_display,
         MAX({$itemTitleExpr}) AS item_title,
         SUM({$qtyExpr}) AS qty_total,
-        {$subtotalExpr} AS subtotal_amount,
-        {$totalExpr} AS total_amount,
-        {$currencyExpr} AS currency_code,
+        {$sellerSubtotalExpr} AS seller_subtotal,
+        {$sellerSubtotalExpr} AS subtotal_amount,
+        MAX({$totalExpr}) AS total_amount,
+        MAX({$currencyExpr}) AS currency_code,
         MAX({$dateSoldExpr}) AS date_sold,
         MAX({$paidAtExpr}) AS paid_at,
-        {$orderStatusExpr} AS order_status,
-        {$paymentStatusExpr} AS payment_status,
-        {$shippingStatusExpr} AS shipping_status
+        MAX({$orderStatusExpr}) AS order_status,
+        MAX({$paymentStatusExpr}) AS payment_status,
+        MAX({$shippingStatusExpr}) AS shipping_status
     FROM `orders` o
-    {$orderItemsJoinSql}
+    JOIN `order_items` oi ON oi.`order_id` = o.`id`
     {$listingsJoinSql}
     {$buyerJoinSql}
-    WHERE {$whereSql}
-    GROUP BY o.`id`, order_code, buyer_display, subtotal_amount, total_amount, currency_code, order_status, payment_status, shipping_status
+    WHERE {$listWhereSql}
+    GROUP BY o.`id`
     ORDER BY MAX({$dateSoldExpr}) DESC, o.`id` DESC
     LIMIT {$perPage} OFFSET {$offset}
 ";
 
-$rows = seller_orders_query_all($db, $listSql, $params);
+$rows = seller_orders_query_all($db, $listSql, $listParams);
 
 
 $viewBase = seller_orders_existing_page([
